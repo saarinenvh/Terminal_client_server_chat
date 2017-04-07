@@ -16,8 +16,7 @@
 int main(int argc , char *argv[])  
 {  
     int opt = TRUE;  
-    int master_socket , addrlen , new_socket , client_socket[30] , 
-          max_clients = 30 , activity, i , valread , sd;  
+    int master_socket , addrlen , new_socket , client_socket[30], max_clients = 30 , activity, i , valread , sd;  
     int max_sd;  
     struct sockaddr_in address;  
         
@@ -171,8 +170,14 @@ int main(int argc , char *argv[])
                 {  
                     //set the string terminating NULL byte on the end 
                     //of the data read 
-                    buffer[valread] = '\0';  
-                    send(sd , buffer , strlen(buffer) , 0 );  
+                    buffer[valread] = '\0';
+                    for ( i = 0; i < max_clients; i++) {
+                    	if ( client_socket[i] != sd) {
+	                    	send(client_socket[i] , buffer , strlen(buffer) , 0 );	                    		
+                    	}
+
+                    }  
+                      
                 }  
             }  
         }  

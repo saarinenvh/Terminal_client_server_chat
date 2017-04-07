@@ -61,9 +61,17 @@ int main(int argc, char **argv) {
     /* connect: create a connection with the server */
     if (connect(sockfd, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0) 
       error("ERROR connecting");
-
-    /* get message line from the user */
-    while (buf[0] != '.') {
+	
+	while (buf[0] != '.') {
+		
+		/* print the server's reply */
+		bzero(buf, BUFSIZE);
+		n = read(sockfd, buf, BUFSIZE);
+		if (n < 0) 
+		  error("ERROR reading from socket");
+		printf("%s",buf);
+	
+	    /* get message line from the user */
 		bzero(buf, BUFSIZE);
 		fgets(buf, BUFSIZE, stdin);
 
@@ -71,13 +79,8 @@ int main(int argc, char **argv) {
 		n = write(sockfd, buf, strlen(buf));
 		if (n < 0) 
 		  error("ERROR writing to socket");
-
-		/* print the server's reply */
-		bzero(buf, BUFSIZE);
-		n = read(sockfd, buf, BUFSIZE);
-		if (n < 0) 
-		  error("ERROR reading from socket");
-	}
+		}
+		
 	
 	printf("THANKS FOR USING CHAT\n");
 	close(sockfd);

@@ -130,13 +130,15 @@ int main(int argc , char *argv[])
             	strcat(welcome_message, " ");
             	strcat(welcome_message, users[i].nick);
             	strcat(welcome_message, "\n");
-            } 
+            	} 
             }
             
        		char *nick_msg = "\nPlease enter your nickname: ";
+       		char *success = "SUCCESS";
        		strcat(welcome_message, nick_msg);
             //send new connection greeting message 
             send(new_socket, welcome_message, strlen(welcome_message), 0);
+            send(new_socket, success, strlen(success), 0);
 
             
             
@@ -183,6 +185,7 @@ int main(int argc , char *argv[])
                     //Close the socket and mark as 0 in list for reuse 
                     close( sd );  
                     users[i].sd = 0;
+                    users[i].nick = " ";
                 }  
                     
                 //Send message to all clients

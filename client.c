@@ -26,14 +26,13 @@ int main(int argc, char **argv)
   char *hostname;
   char buf[BUFSIZE];
 
+  int connected = 0;
   int fdready = 0;
   fd_set inputfds;
   FD_ZERO(&inputfds);
 
   struct timeval inputTimeOut;
   memset(&inputTimeOut, 0, sizeof(struct timeval));
-  inputTimeOut.tv_sec = 1;
-  inputTimeOut.tv_usec = 0;
 
   /* check command line arguments */
   if (argc != 3)
@@ -74,7 +73,6 @@ int main(int argc, char **argv)
     exit(0);
   }
 
-  printf("chat loop\n");
 	while (1)
   {
     FD_ZERO(&inputfds);
@@ -87,7 +85,7 @@ int main(int argc, char **argv)
     if ((fdready = select(sockfd + 1, &inputfds, NULL, NULL, &inputTimeOut)) > 0)
     {
       memset(buf, 0, BUFSIZE);
-      if (FD_ISSET(0, &inputfds))
+      if (FD_ISSET(0, &inputfds) && connected)
       {
         read(0, buf, BUFSIZE);
 
@@ -104,7 +102,13 @@ int main(int argc, char **argv)
       {
         read(sockfd, buf, BUFSIZE);
 
+        if (strstr(buf, "SUCCESS") != NULL)
+        {
+          strcpy(strstr(buf, "SUCCESS"), "\0");
+          connected = 1;
+        }
         printf("%s",buf);
+        fflush(stdout);
       }
     }
 

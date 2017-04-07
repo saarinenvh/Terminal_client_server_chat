@@ -122,7 +122,31 @@ int main(int argc , char *argv[])
             if ((new_socket = accept(master_socket, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {  
                 perror("accept");  
                 exit(EXIT_FAILURE);  
-            }  
+            } 
+		send(new_socket, "CONNECTED\n", 10, 0);
+
+				    fd_set ackfds;
+				    FD_ZERO(&ackfds);
+				    FD_SET(new_socket, &ackfds);
+
+				    struct timeval ackTimeOut;
+				    memset(&ackTimeOut, 0, sizeof(struct timeval));
+				    ackTimeOut.tv_sec = 1;
+				    ackTimeOut.tv_usec = 0;
+				    char ackBuffer[14];
+				    memset(ackBuffer, 0, 14);
+
+				    if (select(new_socket + 1, &ackfds, NULL, NULL, &ackTimeOut) > 0)
+				    {
+				      if (read(new_socket, ackBuffer, 14) < 0)
+				      {
+				        break;
+				      }
+
+				      if (strcmp(ackBuffer, "ACKNOWLEDGED\n") == 0)
+				      {
+				     
+             
             
             // Print socket information to server
             printf("New connection , socket fd is %d , ip is : %s\n" , new_socket , inet_ntoa(address.sin_addr)); 
@@ -175,6 +199,8 @@ int main(int argc , char *argv[])
                     break;  
                 }  
             }  
+            }
+            }
         }  
             
         // IO - operations

@@ -1,88 +1,99 @@
-/* 
- * tcpclient.c - A simple TCP client
- * usage: tcpclient <host> <port>
- */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h> 
+#include <arpa/inet.h>
+#include <netdb.h>
 
 #define BUFSIZE 1024
 
-/* 
- * error - wrapper for perror
- */
-void error(char *msg) {
-    perror(msg);
-    exit(0);
+void closeChat(int sockfd, char *hostname)
+{
+  printf("Disconnected from %s\n", hostname);
+  close(sockfd);
+  exit(0);
 }
 
 
-
-int main(int argc, char **argv) {
-    int sockfd, portno, n;
+int main(int argc, char **argv)
+{
+    int sockfd = -1;
     struct sockaddr_in serveraddr;
     struct hostent *server;
+    struct addrinfo hints, *res, *ressave;
     char *hostname;
     char buf[BUFSIZE];
 
 
     /* check command line arguments */
-    if (argc != 3) {
+    if (argc != 3)
+    {
        fprintf(stderr,"usage: %s <hostname> <port>\n", argv[0]);
        exit(0);
     }
     hostname = argv[1];
-    portno = atoi(argv[2]);
-    
-    
-    /* socket: create the socket */
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) 
-        error("ERROR opening socket");
 
-    /* gethostbyname: get the server's DNS entry */
-    server = gethostbyname(hostname);
-    if (server == NULL) {
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if (getaddrinfo(hostname, argv[2], &hints, &res) != 0)
+    {
         fprintf(stderr,"ERROR, no such host as %s\n", hostname);
         exit(0);
     }
+    ressave = res;
 
-    /* build the server's Internet address */
-    bzero((char *) &serveraddr, sizeof(serveraddr));
-    serveraddr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr, (char *)&serveraddr.sin_addr.s_addr, server->h_length);
-    serveraddr.sin_port = htons(portno);
+    do
+    {
+        sockfd = socket(res->ai_family, res->ai_socktype, 0);
+        if (sockfd < 0)
+            continue;
 
-    /* connect: create a connection with the server */
-    if (connect(sockfd, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0) 
-      error("ERROR connecting");
-	
-	while (buf[0] != '.') {
-		
-		/* print the server's reply */
-		bzero(buf, BUFSIZE);
-		n = read(sockfd, buf, BUFSIZE);
-		if (n < 0) 
-		  error("ERROR reading from socket");
-		printf("%s",buf);
-	
+        if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0)
+            break;
+
+        close(sockfd);  /* ignore this one */
+    } while ( (res = res->ai_next) != NULL);
+
+    freeaddrinfo(ressave);
+
+    if (sockfd < 0)
+    {
+      perror("ERROR opening socket");
+      exit(0);
+    }
+
+	while (1)
+  {
+    /* print the server's reply */
+    memset(buf, 0, BUFSIZE);
+
+    if (read(sockfd, buf, BUFSIZE) < 0)
+    {
+        perror("ERROR reading from socket");
+        exit(0);
+    }
+
+    printf("%s",buf);
+
 	    /* get message line from the user */
-		bzero(buf, BUFSIZE);
-		fgets(buf, BUFSIZE, stdin);
+    memset(buf, 0, BUFSIZE);
+    fgets(buf, BUFSIZE, stdin);
 
-		/* send the message line to the server */
-		n = write(sockfd, buf, strlen(buf));
-		if (n < 0) 
-		  error("ERROR writing to socket");
-		}
-		
-	
-	printf("THANKS FOR USING CHAT\n");
-	close(sockfd);
-    return 0;
+    if (strcmp(buf, "disconnect\n") == 0)
+        closeChat(sockfd, hostname);
+
+    /* send the message line to the server */
+
+    if (write(sockfd, buf, strlen(buf)) < 0)
+    {
+      perror("ERROR writing to socket");
+      exit(0);
+    }
+  }
+
+  closeChat(sockfd, hostname);
 }

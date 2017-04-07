@@ -6,7 +6,10 @@ chat:
 	$(MAKE) client
 
 server: server.c
-	$(CC) -o $@ $^
+	$(CC) -g -o $@ $^
 
 client: client.c
-	$(CC) -o $@ $^
+	$(CC) -g -o $@ $^
+
+clean:
+	rm -f client server client.o server.o

@@ -13,26 +13,41 @@
 #define FALSE  0 
 #define PORT 8888 
     
+struct user {
+	char nick[20];
+	int sd;  
+};
+
+
 int main(int argc , char *argv[])  
 {  
     int opt = TRUE;  
     int master_socket , addrlen , new_socket , client_socket[30], max_clients = 30 , activity, i , valread , sd;  
-    int max_sd;  
+    int max_sd;
+    int n;
+    struct user users[30];  
     struct sockaddr_in address;  
-        
+    char nick_buffer[21];
+    char msg[1046];
     char buffer[1025];  //data buffer of 1K 
         
     //set of socket descriptors 
     fd_set readfds;  
         
     //a message 
-    char *message = "ECHO Daemon v1.0 \r\n";  
+    char *message = "Enter nickname: \r\n";  
     
     //initialise all client_socket[] to 0 so not checked 
     for (i = 0; i < max_clients; i++)  
     {  
         client_socket[i] = 0;  
     }  
+    
+    for (i = 0; i < max_clients; i++) {
+    	users[i].sd = 0;
+    	strcpy(users[i].nick, " ");
+    }
+    
         
     //create a master socket 
     if( (master_socket = socket(AF_INET , SOCK_STREAM , 0)) == 0)  
@@ -86,8 +101,8 @@ int main(int argc , char *argv[])
         //add child sockets to set 
         for ( i = 0 ; i < max_clients ; i++)  
         {  
-            //socket descriptor 
-            sd = client_socket[i];  
+            //socket descriptor   
+            sd = users[i].sd;
                 
             //if valid socket descriptor then add to read list 
             if(sd > 0)  
@@ -126,16 +141,21 @@ int main(int argc , char *argv[])
             {  
                 perror("send");  
             }  
-                
-            puts("Welcome message sent successfully");  
+
+            puts("Welcome message sent successfully"); 
+
                 
             //add new socket to array of sockets 
             for (i = 0; i < max_clients; i++)  
             {  
                 //if position is empty 
-                if( client_socket[i] == 0 )  
+                if( users[i].sd == 0 )  
                 {  
-                    client_socket[i] = new_socket;  
+                    users[i].sd = new_socket;
+                    n = read( users[i].sd, nick_buffer, 20);
+                    nick_buffer[n-1] = ':';
+                    nick_buffer[n] = '\t';
+                    strcpy(users[i].nick, nick_buffer);                    	
                     printf("Adding to list of sockets as %d\n" , i);  
                         
                     break;  
@@ -146,7 +166,8 @@ int main(int argc , char *argv[])
         //else its some IO operation on some other socket
         for (i = 0; i < max_clients; i++)  
         {  
-            sd = client_socket[i];  
+            sd = users[i].sd;
+
                 
             if (FD_ISSET( sd , &readfds))  
             {  
@@ -162,22 +183,23 @@ int main(int argc , char *argv[])
                         
                     //Close the socket and mark as 0 in list for reuse 
                     close( sd );  
+                    users[i].sd = 0;
                     client_socket[i] = 0;  
                 }  
                     
-                //Echo back the message that came in 
+                //Send message to all clients
                 else
                 {  
                     //set the string terminating NULL byte on the end 
                     //of the data read 
                     buffer[valread] = '\0';
-                    for ( i = 0; i < max_clients; i++) {
-                    	if ( client_socket[i] != sd) {
-	                    	send(client_socket[i] , buffer , strlen(buffer) , 0 );	                    		
+                    for (int x = 0; x < max_clients; x++) {
+                    	strcpy(msg, users[i].nick);
+                    	strcat(msg, buffer);
+                    	if ( users[x].sd != sd) {
+	                    	send(users[x].sd , msg , strlen(msg) , 0 );	                    		
                     	}
-
-                    }  
-                      
+                    } 
                 }  
             }  
         }  

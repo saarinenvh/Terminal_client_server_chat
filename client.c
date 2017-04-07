@@ -82,6 +82,37 @@ int main(int argc, char **argv)
     exit(0);
   }
 
+  inputTimeOut.tv_sec = 5;
+  inputTimeOut.tv_usec = 0;
+  FD_SET(sockfd, &inputfds);
+
+  if (select(sockfd + 1, &inputfds, NULL, NULL, &inputTimeOut) > 0)
+  {
+    memset(buf, 0, BUFSIZE);
+    if (read(sockfd, buf, BUFSIZE) < 0)
+    {
+      perror("Error reading from socket");
+      exit(0);
+    }
+
+    if (strcmp(buf, "CONNECTED\n") != 0)
+    {
+      fprintf(stderr, "Cannot connect to %s\n", hostname);
+      exit(0);
+    }
+
+    if (send(sockfd, "ACKNOWLEDGED\n", 14, 0) < 0)
+    {
+      perror("Error acknowledging server");
+      exit(0);
+    }
+  }
+  else
+  {
+    fprintf(stderr, "Cannot connect to %s\n", hostname);
+    exit(0);
+  }
+
   if (setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &(int){1}, sizeof(int)) < 0)
   {
     perror("Error modifying socket");

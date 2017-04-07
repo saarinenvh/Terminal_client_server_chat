@@ -14,7 +14,7 @@
 #define PORT 8888 
     
 struct user {
-	char nick[20];
+	char nick[21];
 	int sd;  
 };
 
@@ -122,28 +122,22 @@ int main(int argc , char *argv[])
             
             //inform user of socket number - used in send and receive commands 
             printf("New connection , socket fd is %d , ip is : %s\n" , new_socket , inet_ntoa(address.sin_addr)); 
-            char *msg_b = "\nKanavalla käyttäjiä:";
-            strcat(welcome_message, msg_b);
+            char msg_b[350] = "\nKanavalla käyttäjiä: ";
             
             for ( i = 0; i < max_clients; i++ ) {
             	if ( users[i].sd != 0 )  {
-            	strcat(welcome_message, " ");
-            	strcat(welcome_message, users[i].nick);
-            	strcat(welcome_message, "\n");
+            		strcat(msg_b, users[i].nick);
+            		strcat(msg_b, " ");
             	} 
             }
             
        		char *nick_msg = "\nPlease enter your nickname: ";
        		char *success = "SUCCESS";
-       		strcat(welcome_message, nick_msg);
             //send new connection greeting message 
             send(new_socket, welcome_message, strlen(welcome_message), 0);
+            send(new_socket, msg_b, strlen(msg_b),0);
+            send(new_socket, nick_msg, strlen(nick_msg),0);
             send(new_socket, success, strlen(success), 0);
-
-            
-            
-  
-
             puts("Welcome message sent successfully"); 
 
                 
@@ -153,11 +147,22 @@ int main(int argc , char *argv[])
                 //if position is empty 
                 if( users[i].sd == 0 )  
                 {  
+
                     users[i].sd = new_socket;
                     n = read( users[i].sd, nick_buffer, 20);
-                    nick_buffer[n-1] = ' ';
-                    nick_buffer[n] = '\0';
-                    strcpy(users[i].nick, nick_buffer);                    	
+                    char *join_msg = nick_buffer;
+                    nick_buffer[n-1] = ':';
+                    nick_buffer[n] = ' ';
+                    nick_buffer[n + 1] = '\0';
+                    strcpy(users[i].nick, nick_buffer); 
+
+                    for (int x = 0; x < max_clients; x++) {
+                    	if ( users[x].sd != sd) {
+	                    	send(users[x].sd , join_msg , strlen(join_msg) , 0 );	                    		
+                    	}
+                    	}
+                    
+                               	
                     printf("Adding to list of sockets as %d\n" , i);  
                     break;  
                 }  
@@ -185,7 +190,7 @@ int main(int argc , char *argv[])
                     //Close the socket and mark as 0 in list for reuse 
                     close( sd );  
                     users[i].sd = 0;
-                    users[i].nick = " ";
+                    strcpy(users[i].nick, " ");
                 }  
                     
                 //Send message to all clients

@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <netdb.h>
+#include <signal.h>
 
 #define BUFSIZE 1024
 
@@ -14,6 +15,12 @@ void closeChat(int sockfd, char *hostname)
   printf("Disconnected from %s\n", hostname);
   close(sockfd);
   exit(0);
+}
+
+void handleSIGPIPE(int signum)
+{
+  printf("Connection to server was lost!\n");
+  exit(signum);
 }
 
 
@@ -30,6 +37,8 @@ int main(int argc, char **argv)
   int fdready = 0;
   fd_set inputfds;
   FD_ZERO(&inputfds);
+
+  signal(SIGPIPE, handleSIGPIPE);
 
   struct timeval inputTimeOut;
   memset(&inputTimeOut, 0, sizeof(struct timeval));
@@ -48,14 +57,14 @@ int main(int argc, char **argv)
 
   if (getaddrinfo(hostname, argv[2], &hints, &res) != 0)
   {
-    fprintf(stderr,"ERROR, no such host as %s\n", hostname);
+    fprintf(stderr,"Error, no such host as %s\n", hostname);
     exit(0);
   }
   ressave = res;
 
   do
   {
-    sockfd = socket(res->ai_family, res->ai_socktype, 0);
+    sockfd = socket(res->ai_family, SOCK_STREAM, 0);
     if (sockfd < 0)
       continue;
 
@@ -69,7 +78,13 @@ int main(int argc, char **argv)
 
   if (sockfd < 0)
   {
-    perror("ERROR opening socket");
+    perror("Error opening socket");
+    exit(0);
+  }
+
+  if (setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &(int){1}, sizeof(int)) < 0)
+  {
+    perror("Error modifying socket");
     exit(0);
   }
 
@@ -92,15 +107,19 @@ int main(int argc, char **argv)
         if (strcmp(buf, "disconnect\n") == 0)
           closeChat(sockfd, hostname);
 
-        if (write(sockfd, buf, strlen(buf)) < 0)
+        if (send(sockfd, buf, strlen(buf), 0) < 0)
         {
-          perror("ERROR writing to socket");
+          perror("Error writing to socket");
           exit(0);
         }
       }
       else if (FD_ISSET(sockfd, &inputfds))
       {
-        read(sockfd, buf, BUFSIZE);
+        if (read(sockfd, buf, BUFSIZE) < 0)
+        {
+          perror("Error reading from socket");
+          exit(0);
+        }
 
         if (strstr(buf, "SUCCESS") != NULL)
         {
@@ -114,7 +133,7 @@ int main(int argc, char **argv)
 
     if (fdready < 0)
     {
-      perror("ERROR reading from socket");
+      perror("Error selecting socket");
       exit(0);
     }
   }

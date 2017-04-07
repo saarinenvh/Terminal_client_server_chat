@@ -8,16 +8,16 @@
 #include <sys/socket.h> 
 #include <netinet/in.h> 
 #include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO macros 
+#include <time.h>
     
 #define TRUE   1 
 #define FALSE  0 
 #define PORT 8888 
     
 struct user {
-	char nick[20];
+	char nick[21];
 	int sd;  
 };
-
 
 int main(int argc , char *argv[])  
 {  
@@ -27,8 +27,13 @@ int main(int argc , char *argv[])
     int max_sd, sd;
     int n, i;
     struct user users[15];  
-    struct sockaddr_in address;  
+    struct sockaddr_in address;
+  	time_t rawtime;
+  	struct tm * timeinfo;
+
+
     fd_set readfds;  			// Set of socket descriptors
+    
     
     if (argc != 2) {
     	fprintf(stderr,"usage: %s <CHATIN NIMI>\n", argv[0]);
@@ -37,19 +42,21 @@ int main(int argc , char *argv[])
     
   	
   	// WELCOME MESSAGE TO SERVER
-    char *msg_a = "WELCOME TO CHAT SERVER ";
+    char *msg_a = "\n\t\tWELCOME TO CHAT SERVER - ";
     strcpy(welcome_message, msg_a);
     strcat(welcome_message, argv[1]);
-
-   
-    
+    strcat(welcome_message, " - Today is ");
+    char tmn_start[80];
+    time ( &rawtime );
+    timeinfo = localtime ( &rawtime );
+	sprintf(tmn_start, "%d.%d.%d %d:%d:%d \n",timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+	strcat(welcome_message, tmn_start);
 
 	// Initialize all users in user array
     for (i = 0; i < max_clients; i++) {
     	users[i].sd = 0;
     	strcpy(users[i].nick, " ");
     }
-    
         
     // Creates a master socket
     if( (master_socket = socket(AF_INET , SOCK_STREAM , 0)) == 0)  {  
@@ -84,14 +91,14 @@ int main(int argc , char *argv[])
     addrlen = sizeof(address);  
     puts("Ready for connections...");  
         
-    while(TRUE)  
-    {  
+    while(TRUE) {  
+    
         //Edit socket set
         FD_ZERO(&readfds);   
         FD_SET(master_socket, &readfds);  
         max_sd = master_socket;  
             
-        //add child sockets to set 
+        //Add users to set 
         for ( i = 0 ; i < max_clients ; i++) {  
             sd = users[i].sd;
             if(sd > 0) {            
@@ -103,7 +110,7 @@ int main(int argc , char *argv[])
             }
         }  
     
-		// Waiting for any activity in sockets
+		// Activity check from sockets
         activity = select( max_sd + 1 , &readfds , NULL , NULL , NULL);  
       
         if ((activity < 0) && (errno!=EINTR)) {  
@@ -111,92 +118,115 @@ int main(int argc , char *argv[])
         }  
             
 
-        if (FD_ISSET(master_socket, &readfds))  
-        {  
-            if ((new_socket = accept(master_socket, 
-                    (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)  
-            {  
+        if (FD_ISSET(master_socket, &readfds)) {  
+            if ((new_socket = accept(master_socket, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {  
                 perror("accept");  
                 exit(EXIT_FAILURE);  
             }  
             
-            //inform user of socket number - used in send and receive commands 
+            // Print socket information to server
             printf("New connection , socket fd is %d , ip is : %s\n" , new_socket , inet_ntoa(address.sin_addr)); 
-            char *msg_b = "\nKanavalla käyttäjiä:";
-            strcat(welcome_message, msg_b);
+            
+            
+            // Check users nick for welcome text
+       		char *nick_msg = "\nPlease enter your nickname: ";
+       		char *success = "SUCCESS";
+            char msg_b[350] = "\nUsers online: ";
             
             for ( i = 0; i < max_clients; i++ ) {
             	if ( users[i].sd != 0 )  {
-            	strcat(welcome_message, " ");
-            	strcat(welcome_message, users[i].nick);
-            	strcat(welcome_message, "\n");
+            		strcat(msg_b, users[i].nick);
+            		strcat(msg_b, " ");
             	} 
             }
+            strcat(msg_b, "\n");
             
-       		char *nick_msg = "\nPlease enter your nickname: ";
-       		char *success = "SUCCESS";
-       		strcat(welcome_message, nick_msg);
-            //send new connection greeting message 
+            // Send messages to new client
             send(new_socket, welcome_message, strlen(welcome_message), 0);
+            send(new_socket, msg_b, strlen(msg_b),0);
+            send(new_socket, nick_msg, strlen(nick_msg),0);
             send(new_socket, success, strlen(success), 0);
-
-            
-            
-  
-
-            puts("Welcome message sent successfully"); 
+            printf("INIT MESSAGE SENT\n");
 
                 
-            //add new socket to array of sockets 
-            for (i = 0; i < max_clients; i++)  
-            {  
-                //if position is empty 
-                if( users[i].sd == 0 )  
-                {  
+            //add new socket to array of users
+            for (i = 0; i < max_clients; i++) {  
+                // If position in array is empty
+                if( users[i].sd == 0 ) {  
+
                     users[i].sd = new_socket;
                     n = read( users[i].sd, nick_buffer, 20);
-                    nick_buffer[n-1] = ' ';
                     nick_buffer[n] = '\0';
-                    strcpy(users[i].nick, nick_buffer);                    	
-                    printf("Adding to list of sockets as %d\n" , i);  
+                    
+                    // SEND JOIN MESSAGE TO CHANNEL
+                    char msg_join[50] = "*** New user joined:  ";
+                    strcat(msg_join, nick_buffer);
+                    for (int x = 0; x < max_clients; x++) {
+                    	if ( users[x].sd != sd) {
+	                    	send(users[x].sd , msg_join , strlen(msg_join) , 0 );	                    		
+                    	}
+                    }
+                    
+                    // ADD NAME INFO
+                    nick_buffer[n - 1] = '\0';
+                    strcpy(users[i].nick, nick_buffer); 
+ 
+                    printf("New socket added list into index %d\n" , i);  
                     break;  
                 }  
             }  
         }  
             
-        //else its some IO operation on some other socket
+        // IO - operations
         for (i = 0; i < max_clients; i++)  
         {  
             sd = users[i].sd;
-
                 
-            if (FD_ISSET( sd , &readfds))  
-            {  
-                //Check if it was for closing , and also read the 
-                //incoming message 
+            if (FD_ISSET( sd , &readfds)) {  
+            
+            	// Closing socket and message read
                 if ((msgread = read( sd , buffer, 1024)) == 0)  
                 {  
-                    //Somebody disconnected , get his details and print 
-                    getpeername(sd , (struct sockaddr*)&address , \
-                        (socklen_t*)&addrlen);  
-                    printf("Host disconnected , ip %s , port %d \n" , 
-                          inet_ntoa(address.sin_addr) , ntohs(address.sin_port));  
+                    // Somebody disconnected 
+                    getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);  
+                    printf("Host disconnected , ip %s , port %d \n" , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));  
                         
-                    //Close the socket and mark as 0 in list for reuse 
-                    close( sd );  
+                    // close socket
+                    close(sd);  
                     users[i].sd = 0;
-                    users[i].nick = " ";
-                }  
                     
-                //Send message to all clients
-                else
-                {  
-                    //set the string terminating NULL byte on the end 
-                    //of the data read 
-                    buffer[msgread] = '\0';
+                    // SEND QUIT MESSAGE TO CHANNEL
+                    char quit_msg[50] = "*** User disconnected: ";
+                    strcat (quit_msg, users[i].nick);
+                    strcat (quit_msg, "\n");
                     for (int x = 0; x < max_clients; x++) {
-                    	strcpy(msg, users[i].nick);
+                    	if ( users[x].sd != sd) {
+	                    	send(users[x].sd , quit_msg , strlen(quit_msg) , 0 );	                    		
+                    	}
+                    }
+                    
+                    strcpy(users[i].nick, " ");
+                    
+                } else {  
+                
+                    buffer[msgread] = '\0';
+                    
+                    for (int x = 0; x < max_clients; x++) {
+                    	
+                    	// TIMESTAMP
+                    	char tmn[20];
+					  	time ( &rawtime );
+					  	timeinfo = localtime ( &rawtime );
+						sprintf(tmn, "[%d:%d:%d] ",timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+						strcpy(msg,tmn);
+						
+						// Add nick
+                    	strcat(msg, users[i].nick);
+                    	strcat(msg, ": ");
+                    	
+                    	// Add buffer
                     	strcat(msg, buffer);
+                    	
                     	if ( users[x].sd != sd) {
 	                    	send(users[x].sd , msg , strlen(msg) , 0 );	                    		
                     	}

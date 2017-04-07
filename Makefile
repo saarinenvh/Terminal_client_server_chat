@@ -1,15 +1,15 @@
 CC=gcc
-CFLAGS=-I.
+CFLAGS=-g -std=gnu11 -o
 
 chat:
 	$(MAKE) server
 	$(MAKE) client
 
 server: server.c
-	$(CC) -g -o $@ $^
+	$(CC) $(CFLAGS) $@ $^
 
 client: client.c
-	$(CC) -g -o $@ $^
+	$(CC) $(CFLAGS) $@ $^
 
 clean:
 	rm -f client server client.o server.o

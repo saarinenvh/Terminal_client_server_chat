@@ -22,108 +22,95 @@ struct user {
 int main(int argc , char *argv[])  
 {  
     int opt = TRUE;  
-    int master_socket , addrlen , new_socket , client_socket[30], max_clients = 30 , activity, i , valread , sd;  
-    int max_sd;
-    int n;
-    struct user users[30];  
+    char nick_buffer[22], msg[1046], buffer[1025], welcome_message[1000]; 
+    int master_socket, addrlen, new_socket, max_clients = 15, activity, msgread;
+    int max_sd, sd;
+    int n, i;
+    struct user users[15];  
     struct sockaddr_in address;  
-    char nick_buffer[21];
-    char msg[1046];
-    char buffer[1025];  //data buffer of 1K 
-        
-    //set of socket descriptors 
-    fd_set readfds;  
-        
-    //a message 
-    char *message = "Enter nickname: \r\n";  
+    fd_set readfds;  			// Set of socket descriptors
     
-    //initialise all client_socket[] to 0 so not checked 
-    for (i = 0; i < max_clients; i++)  
-    {  
-        client_socket[i] = 0;  
-    }  
+    if (argc != 2) {
+    	fprintf(stderr,"usage: %s <CHATIN NIMI>\n", argv[0]);
+    	exit(0);
+    }
     
+  	
+  	// WELCOME MESSAGE TO SERVER
+    char *msg_a = "WELCOME TO CHAT SERVER ";
+    strcpy(welcome_message, msg_a);
+    strcat(welcome_message, argv[1]);
+
+   
+    
+
+	// Initialize all users in user array
     for (i = 0; i < max_clients; i++) {
     	users[i].sd = 0;
     	strcpy(users[i].nick, " ");
     }
     
         
-    //create a master socket 
-    if( (master_socket = socket(AF_INET , SOCK_STREAM , 0)) == 0)  
-    {  
-        perror("socket failed");  
+    // Creates a master socket
+    if( (master_socket = socket(AF_INET , SOCK_STREAM , 0)) == 0)  {  
+        perror("Failed to create socket");  
         exit(EXIT_FAILURE);  
     }  
     
-    //set master socket to allow multiple connections , 
-    //this is just a good habit, it will work without this 
-    if( setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, 
-          sizeof(opt)) < 0 )  
-    {  
-        perror("setsockopt");  
+    // Option allows master socket for multiple connections
+    if( setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt)) < 0 ) {  
+        perror("Failed to set options in master socket");  
         exit(EXIT_FAILURE);  
     }  
     
-    //type of socket created 
+    // Address
     address.sin_family = AF_INET;  
     address.sin_addr.s_addr = INADDR_ANY;  
     address.sin_port = htons( PORT );  
         
-    //bind the socket to localhost port 8888 
-    if (bind(master_socket, (struct sockaddr *)&address, sizeof(address))<0)  
-    {  
-        perror("bind failed");  
+    // Binding master socket to port
+    if ( bind(master_socket, (struct sockaddr *)&address, sizeof(address)) < 0 )  {  
+        perror("Binding to port failed");  
         exit(EXIT_FAILURE);  
     }  
-    printf("Listener on port %d \n", PORT);  
-        
-    //try to specify maximum of 3 pending connections for the master socket 
-    if (listen(master_socket, 3) < 0)  
-    {  
+            
+    // Listening connections
+    if (listen(master_socket, 3) < 0) {  
         perror("listen");  
         exit(EXIT_FAILURE);  
     }  
-        
-    //accept the incoming connection 
+    
+	printf("Listener works on port: %d \n", PORT);  
     addrlen = sizeof(address);  
-    puts("Waiting for connections ...");  
+    puts("Ready for connections...");  
         
     while(TRUE)  
     {  
-        //clear the socket set 
-        FD_ZERO(&readfds);  
-    
-        //add master socket to set 
+        //Edit socket set
+        FD_ZERO(&readfds);   
         FD_SET(master_socket, &readfds);  
         max_sd = master_socket;  
             
         //add child sockets to set 
-        for ( i = 0 ; i < max_clients ; i++)  
-        {  
-            //socket descriptor   
+        for ( i = 0 ; i < max_clients ; i++) {  
             sd = users[i].sd;
-                
-            //if valid socket descriptor then add to read list 
-            if(sd > 0)  
+            if(sd > 0) {            
                 FD_SET( sd , &readfds);  
+                }
                 
-            //highest file descriptor number, need it for the select function 
-            if(sd > max_sd)  
+            if(sd > max_sd) {
                 max_sd = sd;  
+            }
         }  
     
-        //wait for an activity on one of the sockets , timeout is NULL , 
-        //so wait indefinitely 
+		// Waiting for any activity in sockets
         activity = select( max_sd + 1 , &readfds , NULL , NULL , NULL);  
       
-        if ((activity < 0) && (errno!=EINTR))  
-        {  
+        if ((activity < 0) && (errno!=EINTR)) {  
             printf("select error");  
         }  
             
-        //If something happened on the master socket , 
-        //then its an incoming connection 
+
         if (FD_ISSET(master_socket, &readfds))  
         {  
             if ((new_socket = accept(master_socket, 
@@ -134,13 +121,26 @@ int main(int argc , char *argv[])
             }  
             
             //inform user of socket number - used in send and receive commands 
-            printf("New connection , socket fd is %d , ip is : %s , port : %d \n" , new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));  
-          
+            printf("New connection , socket fd is %d , ip is : %s\n" , new_socket , inet_ntoa(address.sin_addr)); 
+            char *msg_b = "\nKanavalla käyttäjiä:";
+            strcat(welcome_message, msg_b);
+            
+            for ( i = 0; i < max_clients; i++ ) {
+            	if ( users[i].sd != 0 )  {
+            	strcat(welcome_message, " ");
+            	strcat(welcome_message, users[i].nick);
+            	strcat(welcome_message, "\n");
+            } 
+            }
+            
+       		char *nick_msg = "\nPlease enter your nickname: ";
+       		strcat(welcome_message, nick_msg);
             //send new connection greeting message 
-            if( send(new_socket, message, strlen(message), 0) != strlen(message) )  
-            {  
-                perror("send");  
-            }  
+            send(new_socket, welcome_message, strlen(welcome_message), 0);
+
+            
+            
+  
 
             puts("Welcome message sent successfully"); 
 
@@ -153,11 +153,10 @@ int main(int argc , char *argv[])
                 {  
                     users[i].sd = new_socket;
                     n = read( users[i].sd, nick_buffer, 20);
-                    nick_buffer[n-1] = ':';
-                    nick_buffer[n] = '\t';
+                    nick_buffer[n-1] = ' ';
+                    nick_buffer[n] = '\0';
                     strcpy(users[i].nick, nick_buffer);                    	
                     printf("Adding to list of sockets as %d\n" , i);  
-                        
                     break;  
                 }  
             }  
@@ -173,7 +172,7 @@ int main(int argc , char *argv[])
             {  
                 //Check if it was for closing , and also read the 
                 //incoming message 
-                if ((valread = read( sd , buffer, 1024)) == 0)  
+                if ((msgread = read( sd , buffer, 1024)) == 0)  
                 {  
                     //Somebody disconnected , get his details and print 
                     getpeername(sd , (struct sockaddr*)&address , \
@@ -184,7 +183,6 @@ int main(int argc , char *argv[])
                     //Close the socket and mark as 0 in list for reuse 
                     close( sd );  
                     users[i].sd = 0;
-                    client_socket[i] = 0;  
                 }  
                     
                 //Send message to all clients
@@ -192,7 +190,7 @@ int main(int argc , char *argv[])
                 {  
                     //set the string terminating NULL byte on the end 
                     //of the data read 
-                    buffer[valread] = '\0';
+                    buffer[msgread] = '\0';
                     for (int x = 0; x < max_clients; x++) {
                     	strcpy(msg, users[i].nick);
                     	strcat(msg, buffer);
